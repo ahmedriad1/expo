@@ -2,7 +2,9 @@ package expo.modules.appmetrics
 
 import android.content.Context
 import android.util.Log
+import androidx.core.content.edit
 import java.io.FileNotFoundException
+import java.util.concurrent.ConcurrentHashMap
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -53,4 +55,45 @@ object ObserveConsent {
       Log.w(TAG, "[AppMetrics] Failed to read the embedded app config", e)
       null
     }
+}
+
+/**
+ * Shared preferences that save nothing while consent is not granted. Values set then stay in
+ * memory, so readers in the same process still see them.
+ */
+class ConsentGatedPreferences(private val name: String) {
+  private val unsavedValues = ConcurrentHashMap<String, Any>()
+
+  fun getString(context: Context, key: String): String? =
+    if (ObserveConsent.isGranted) {
+      preferences(context).getString(key, null)
+    } else {
+      unsavedValues[key] as? String
+    }
+
+  fun getLong(context: Context, key: String, defaultValue: Long): Long =
+    if (ObserveConsent.isGranted) {
+      preferences(context).getLong(key, defaultValue)
+    } else {
+      unsavedValues[key] as? Long ?: defaultValue
+    }
+
+  /** With `commit`, the value is on disk when this returns. */
+  fun putString(context: Context, key: String, value: String, commit: Boolean = true) {
+    if (ObserveConsent.isGranted) {
+      preferences(context).edit(commit) { putString(key, value) }
+    } else {
+      unsavedValues[key] = value
+    }
+  }
+
+  fun putLong(context: Context, key: String, value: Long) {
+    if (ObserveConsent.isGranted) {
+      preferences(context).edit(commit = true) { putLong(key, value) }
+    } else {
+      unsavedValues[key] = value
+    }
+  }
+
+  private fun preferences(context: Context) = context.getSharedPreferences(name, Context.MODE_PRIVATE)
 }
