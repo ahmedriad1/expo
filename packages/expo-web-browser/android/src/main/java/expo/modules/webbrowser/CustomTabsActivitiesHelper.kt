@@ -19,10 +19,15 @@ internal class CustomTabsActivitiesHelper(
   // region Actual custom tabs activities helper methods
 
   /**
+   * Counts only activities that declare `CATEGORY_DEFAULT`. `startActivity()` cannot start an
+   * implicit intent in any other activity.
+   *
    * @throws PackageManagerNotFoundException
    */
   fun canResolveIntent(customTabsIntent: CustomTabsIntent): Boolean =
-    getResolvingActivities(customTabsIntent).isNotEmpty()
+    packageManager
+      .queryIntentActivities(customTabsIntent.intent, PackageManager.MATCH_DEFAULT_ONLY)
+      .isNotEmpty()
 
   /**
    * @throws PackageManagerNotFoundException
