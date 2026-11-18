@@ -3,6 +3,9 @@ package expo.modules.appmetrics
 import android.content.Context
 import android.util.Log
 import androidx.core.content.edit
+import expo.modules.appmetrics.crashreporting.CrashFileFormat
+import expo.modules.appmetrics.jserrors.PendingErrorStore
+import expo.modules.appmetrics.storage.MetricsDatabase
 import java.io.FileNotFoundException
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.serialization.json.Json
@@ -57,6 +60,14 @@ object ObserveConsent {
     }
 }
 
+/** Deletes the metrics database, the crash files, the pending-error files, and the settings. */
+internal fun deleteStoredData(context: Context) {
+  context.deleteDatabase(MetricsDatabase.NAME)
+  CrashFileFormat.crashesDir(context).deleteRecursively()
+  PendingErrorStore.directory(context).deleteRecursively()
+  AppMetricsPreferences.deleteStoredSettings(context)
+}
+
 /**
  * Shared preferences that save nothing while consent is not granted. Values set then stay in
  * memory, so readers in the same process still see them.
@@ -93,6 +104,11 @@ class ConsentGatedPreferences(private val name: String) {
     } else {
       unsavedValues[key] = value
     }
+  }
+
+  /** Deletes the settings file. Runs at a launch without consent. */
+  fun delete(context: Context) {
+    context.deleteSharedPreferences(name)
   }
 
   private fun preferences(context: Context) = context.getSharedPreferences(name, Context.MODE_PRIVATE)
