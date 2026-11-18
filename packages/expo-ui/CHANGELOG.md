@@ -1,5 +1,11 @@
 # Changelog
 
+## 58.0.30
+
+### Patch Changes
+
+- Fix TypeScript rejecting a `PlatformColor` as the text color of the universal `Text`, `TextInput`, and `Collapsible`. The `color` of `UniversalTextStyle` is now a `ColorValue`. ([#53573](https://github.com/expo/expo/pull/53573) by [@miniware9](https://github.com/miniware9))
+
 ## 58.0.29
 
 ### Patch Changes
