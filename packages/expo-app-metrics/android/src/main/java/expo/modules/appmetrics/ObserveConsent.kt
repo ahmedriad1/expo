@@ -22,13 +22,19 @@ object ObserveConsent {
   var isGranted: Boolean = true
     private set
 
-  /** Reads the consent value from the app config embedded in the app. */
+  /** Reads the saved consent value, or the app config embedded in the app when there is none. */
   fun load(context: Context) {
-    isGranted = resolve(readEmbeddedAppConfig(context))
+    isGranted = resolve(AppMetricsPreferences.getObserveConsent(context), readEmbeddedAppConfig(context))
   }
 
-  /** Consent from the `extra.eas.observe.consent` key of the app config JSON, granted when the key is missing. */
-  internal fun resolve(appConfig: String?): Boolean {
+  /**
+   * Consent from the saved value, else from the `extra.eas.observe.consent` key of the app config
+   * JSON, granted when both are missing.
+   */
+  internal fun resolve(savedConsent: String?, appConfig: String?): Boolean {
+    if (savedConsent != null) {
+      return savedConsent == GRANTED
+    }
     val consent = (appConfig?.let { runCatching { Json.parseToJsonElement(it) }.getOrNull() } as? JsonObject)
       ?.let { it["extra"] as? JsonObject }
       ?.let { it["eas"] as? JsonObject }
@@ -36,15 +42,18 @@ object ObserveConsent {
       ?.get("consent")
       ?: return true
     val value = (consent as? JsonPrimitive)?.takeIf { it.isString }?.content
-    if (value != "granted" && value != "not-granted") {
+    if (value != GRANTED && value != NOT_GRANTED) {
       Log.w(
         TAG,
         "[AppMetrics] The app config value `extra.eas.observe.consent` is $consent, which is not " +
           "'granted' or 'not-granted', so Observe stays inactive. Set it to 'granted' or 'not-granted'."
       )
     }
-    return value == "granted"
+    return value == GRANTED
   }
+
+  private const val GRANTED = "granted"
+  private const val NOT_GRANTED = "not-granted"
 
   // `load` runs in `Application.onCreate`, before JS and the Expo modules start, so the value
   // cannot come from the module constants. The expo-constants reader is private, and this
