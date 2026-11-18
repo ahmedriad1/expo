@@ -92,3 +92,26 @@ it('ignores foregrounding before verification finishes and dismisses after openi
   expect(removeAppState).toHaveBeenCalledTimes(2);
   expect(mockRemoveRedirect).toHaveBeenCalledTimes(2);
 });
+
+it('ends an opened session before the next session starts verification', async () => {
+  const first = openAuthSessionAsync(startUrl, returnUrl, options);
+  await new Promise<void>((resolve) => setImmediate(resolve));
+
+  let verification: PromiseWithResolvers<{ type: WebBrowserResultType.OPENED }> | undefined;
+  ExpoWebBrowser.openBrowserAsync.mockImplementationOnce(() => {
+    verification = Promise.withResolvers();
+    return verification.promise;
+  });
+  ExpoWebBrowser.cancelPendingBrowserOpen.mockImplementation(async () => {
+    verification?.reject(new Error('Browser opening canceled'));
+  });
+  const second = openAuthSessionAsync(startUrl, returnUrl, options);
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  verification?.resolve({ type: WebBrowserResultType.OPENED });
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  jest.mocked(Linking.addEventListener).mock.calls.at(-1)![1]({ url: returnUrl });
+
+  await expect(second).resolves.toEqual({ type: 'success', url: returnUrl });
+  await expect(first).resolves.toEqual({ type: WebBrowserResultType.DISMISS });
+  expect(mockRemoveRedirect).toHaveBeenCalledTimes(2);
+});

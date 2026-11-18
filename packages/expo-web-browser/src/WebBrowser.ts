@@ -330,6 +330,10 @@ let _redirectSubscription: EmitterSubscription | null = null;
 // Store the `resolve` function from a Promise to fire when the AppState
 // returns to active
 let _onWebBrowserCloseAndroid: null | (() => void) = null;
+// True while the browser of the current auth session is open.
+let _isWebBrowserOpenAndroid = false;
+// Settles when the current auth session ends.
+let _authSessionAndroid: Promise<void> = Promise.resolve();
 
 // If the initial AppState.currentState is null, we assume that the first call to
 // AppState#change event is not actually triggered by a real change,
@@ -373,12 +377,14 @@ async function _openBrowserAndWaitAndroidAsync(
   }
 
   if (type === 'opened') {
+    _isWebBrowserOpenAndroid = true;
     await appStateChangedToActive;
     result = { type: WebBrowserResultType.DISMISS };
   }
 
   stateChangeSubscription.remove();
   _onWebBrowserCloseAndroid = null;
+  _isWebBrowserOpenAndroid = false;
   return result;
 }
 
@@ -387,6 +393,13 @@ async function _openAuthSessionPolyfillAsync(
   returnUrl?: string | null,
   browserParams: AuthSessionOpenOptions = {}
 ): Promise<WebBrowserAuthSessionResult> {
+  // In split-screen and freeform windows, the app can stay `active` while the browser closes.
+  // AppState then never settles the session. Dismiss it and wait until it ends.
+  if (_isWebBrowserOpenAndroid) {
+    _onWebBrowserCloseAndroid?.();
+    await _authSessionAndroid;
+  }
+
   if (_redirectSubscription) {
     throw new Error(
       `The WebBrowser's auth session is in an invalid state with a redirect handler set when it should not be`
@@ -398,6 +411,10 @@ async function _openAuthSessionPolyfillAsync(
   }
 
   let browserPromise: Promise<WebBrowserResult> | undefined;
+  let endSession = () => {};
+  _authSessionAndroid = new Promise((resolve) => {
+    endSession = resolve;
+  });
   try {
     if (Platform.OS === 'android') {
       browserPromise = _openBrowserAndWaitAndroidAsync(startUrl, browserParams);
@@ -422,6 +439,7 @@ async function _openAuthSessionPolyfillAsync(
       ExponentWebBrowser.dismissBrowser();
     }
 
+    endSession();
     _stopWaitingForRedirect();
   }
 }
